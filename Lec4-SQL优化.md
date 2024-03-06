@@ -52,16 +52,16 @@ $$
 
 ## 1.6. 优化器只能对关系领域进行优化
 1. 忽略这点很可能出现错误
-2. 例子：查询不是经理的员工当中，哪五个人收入最高？注意order by的问题
+2. 例子：查询不是经理的员工当中，哪五个人收入最高？注意order by的问题 
 
 ```sql
-// 错误的
+// 错误的    会先截取前5行，再排序
 select empname, salary
   from employees
     where status != 'EXECUTIVE'
     and rownum <= 5
     order by salary desc
-// 正确的
+// 正确的    先得到排序后的结果，再截取前5行
 select *
   from (select empname, salary
     from employees
