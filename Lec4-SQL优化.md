@@ -399,7 +399,7 @@ Where (joins and other conditions)
 ```
 
 ## 4.4. 将子查询转换为JOIN
-1. 不包含聚合函数，不出现多种条件选择可以不需要子查询
+1. 不包含聚合函数，不出现多种条件选择可以不需要子查询 。如果有过滤条件好坏以及最高层的distinct可以用子查询，其他没有特殊情况可以将选择权交给优化器。
 2. Jobs(employee，title) Ranks(title，rank)Salary(rank，payment)
 
 ```sql
@@ -417,6 +417,7 @@ Select payment from salary, ranks,jobs
 ## 4.5. 查询不存在的内容(左右连接)
 1. 在salary表中查询是否存在某个等级当前没有分配职位，显示等级和薪水
 2. Jobs(employee，title) Ranks(title，rank)Salary(rank，payment)
+3. 第一种性能很差，要建立rank的临时表，外键索引无法使用，需要全表遍历。查找表中不匹配的行，应该用外连接outer join。
 
 ```sql
 Select salary.ranks salary.payment from salary
@@ -430,45 +431,62 @@ Where ranks.rank IS NULL
 ```
 
 ## 4.6. 将聚合子查询转换为JOIN或内嵌视图
-1. 在订单完成前有不同状态，记录在orderstatus（ordid,status,statusdate）中
+1. 在订单完成前有不同状态，记录在orderstatus（ordid,status,statusdate）中，主键(ordid,statusdate)
 2. 需求是：列出所有尚未标记为完成状态的订单的下列字段：订单号，客户名，订单的最后状态，以及设置状态的时间。
+3. 过滤分组字段或聚合结果，在group by之后过滤having，和聚合无关的操作放在where中
 
 ## 4.7. 再回头看订单和客户的例子
 
 1. 需求是：列出所有尚未标记为完成状态的订单的下列字段：订单号，客户名，订单的最后状态，以及设置状态的时间
 
 ```sql
+//版本1，两个子查询访问了相同的表，orderstatus被遍历了三次
 select c.custname, o.ordid, os.status, os.statusdate
   from customers c,
     orders o,
     orderstatus os
   where o.ordid = os.ordid
-    and not exists (select null
+    and not exists (select null    //找到未完成的
       from orderstatus os2
       where os2.status = 'COMPLETE'
       and os2.ordid = o.ordid)
-    and os.statusdate = (select max(statusdate)
+    and os.statusdate = (select max(statusdate)  //找到最后的时间
       from orderstatus os3
       where os3.ordid = o.ordid)
-      and o.custid = c.custid
-      and (o.ordid, os.statusdate)
-=
-(select ordid, max(statusdate)
-from orderstatus
-group by ordid)
+    and o.custid = c.custid
+
+//版本2，重写之后的子查询
+select c.custname, o.ordid, os.status, os.statusdate
+  from customers c,
+    orders o,
+    orderstatus os
+  where o.ordid = os.ordid
+    and not exists (select null    //找到未完成的
+      from orderstatus os2
+      where os2.status = 'COMPLETE'
+      and os2.ordid = o.ordid)
+    and (o.ordid, os.statusdate) = (select ordid, max(statusdate) //左边的字段对比较别扭，优化器可能将两张表连在一起
+      from orderstatus
+      group by ordid)
+    and o.custid = c.custid
+    
+
+//这样写先子查询再连接
+    and (os.ordid, os.statusdate) 
 ```
 
 ## 4.8. 非关联子查询变成内嵌视图
 ```sql
+//版本3，内嵌视图
 select c.custname, o.ordid, os.status, os.statusdate
   from customers c,
     orders o,
     orderstatus os,
-    (select ordid, max(statusdate) laststatusdate
+    (select ordid, max(statusdate) laststatusdate    //增加内嵌视图x，不会瞎连接了
     from orderstatus
     group by ordid) x
   where o.ordid = os.ordid
-    and not exists (select null
+    and not exists (select null       //没有必要了
       from orderstatus os2
       where os2.status = 'COMPLETE'
       and os2.ordid = o.ordid)
@@ -476,6 +494,7 @@ select c.custname, o.ordid, os.status, os.statusdate
     and os.ordid = x.ordid
     and o.custid = c.custid
 
+//版本4，完美完成了需求，虽然要全表遍历，但是减少了链接，一般情况下性能好很多
 select c.custname, o.ordid, os.status, os.statusdate
   from customers c,
     orders o,
@@ -486,11 +505,14 @@ select c.custname, o.ordid, os.status, os.statusdate
   where o.ordid = os.ordid
     and os.statusdate = x.laststatusdate
     and os.ordid = x.ordid
-    and os.status != 'COMPLETE'
+    and os.status != 'COMPLETE'  //不需要exists，全表遍历
     and o.custid = c.custid
 ```
 
+可以在orders表中加一个冗余字段最新状态，每次更新orderstatus表的时候通过触发器更新。
+
 ## 4.9. 思考题
+
 1. Orders(custid，ordered，totalitems)
 2. 需要显示每一个客户购物件数最多的日期，如何用连接改写这个SQL的子查询
 
