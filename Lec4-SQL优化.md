@@ -242,6 +242,7 @@ where city = 'Nanjing'
 
 1. 关联子查询中，orders表中custid字段要有索引，而对非关联子查询则不需要，因为要用到的索引是customers的主键索引
 2. 内层查询不再依赖外层查询，只需要执行一次
+3. 如果外层的条件好就用exists，他会暗示优化器先做外层的查询，内层条件好就用in。in会隐式地消除重复项。
 
 ## 3.8. 还可以进一步嵌套
 1. exists -> ordid in
@@ -505,11 +506,19 @@ select c.custname, o.ordid, os.status, os.statusdate
   where o.ordid = os.ordid
     and os.statusdate = x.laststatusdate
     and os.ordid = x.ordid
-    and os.status != 'COMPLETE'  //不需要exists，全表遍历
+    and os.status != 'COMPLETE'  //不需要exists
     and o.custid = c.custid
 ```
 
-可以在orders表中加一个冗余字段最新状态，每次更新orderstatus表的时候通过触发器更新。
+内嵌视图对orderstatus进行了全表遍历，但也减少了一次连接操作，一般情况下是有利的。
+
+如果仍然有性能问题，从根本上解决问题，可以在orders表中加一个冗余字段记录最新状态，每次更新orderstatus表的时候通过触发器更新。
+
+用户有多个地址，需要一个表address记录用户id和地址，搜索用户地址要做表连接。网站会使用缺省地址，在customer表中记录，这样在订单界面就不需要链接地址表，只有在更改地址的时候需要连接，可以大幅提升系统的吞吐量。
+
+但是维护成本也上升了，需要维护触发器，取决于数据更新频率。
+
+还有一个办法，查询的时候加一个时间限定。未完成的订单一般是最近一个月的，建立时间的索引，只返回最近一个月的订单，用户有需要再返回更早的订单。
 
 ## 4.9. 思考题
 
@@ -544,7 +553,7 @@ Where o1.ordered = (
 
 ### 5.2.1. 遍历字符串
 1. 这是一切字符串处理的基础，你需要有逐字遍历字符串的能力
-2. SQL没有Loop循环功能，我们需要有**数据透视表**(T1，T10，T100...)
+2. SQL没有Loop循环功能，我们需要有**数据透视表**(T1，T10，T100...)   t10是包含一列id 范围1到10的表
 3. 问题：把EMP表中的ENAME=KING的字符串拆开显示为4行，每行一个字符
 
 ```sql
@@ -558,7 +567,7 @@ Where o1.ordered = (
 ![](img/lec4/11.png)
 
 ### 5.2.2. 嵌入引号
-1. 如果想在字符串常量中嵌入引号，并且希望使用SQL产生如下所示的结果
+1. 如果想在字符串常量中嵌入引号，并且希望使用SQL产生如下所示的结果 双引号显示为一个引号
 
 ```sql
 1 select 'g''day mate' qmarks from t1 union all
@@ -711,6 +720,7 @@ from t1
 ### 5.2.9. 思考题
 1. 把行数据变成以某种符号分割符的列表，比如逗号
 2. 可以使用聚合函数完成的业务都不要到业务逻辑(前端和后端)来处理
+3. MySQL的GROUP_CONCAT
 
 ![](img/lec4/16.png)
 
