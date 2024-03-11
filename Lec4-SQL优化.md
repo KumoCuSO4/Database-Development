@@ -791,7 +791,10 @@ AVG(SAL)
 1566.66667
 ```
 
+聚合操作一定要考虑空值的问题，空值所在行不统计和空值记为0是完全不同的需求，默认是不计算空值的行。
+
 ### 5.3.3. 查找最大值和最小值
+
 ```sql
 1 select min(sal) as min_sal, max(sal) as max_sal
 2   from emp
@@ -811,7 +814,10 @@ DEPTNO        MIN_SAL         MAX_SAL
 30            950             2850
 ```
 
+用于分组group by的列不一定需要放到select中
+
 ### 5.3.4. 求和
+
 ```sql
 1 select sum(sal)
 2   from emp
@@ -831,7 +837,10 @@ DEPTNO      TOTAL_FOR_DEPT
 30          9400
 ```
 
+不用考虑空值
+
 ### 5.3.5. 计算行数
+
 ```sql
 1 select count(*)
 2   from emp
@@ -864,11 +873,18 @@ COUNT(COMM)
 4
 ```
 
+count(*) 统计所有的空值和非空值
+
+count(column) 统计某一列非空值
+
 ### 5.3.6. 累计求和(Running Total)
+
+展示累加的过程 窗口函数做累加 sum(...) over (order by ...)
+
 ```sql
 /* Oracle and DB2(MySQL已经支持了) */
 1 select ename, sal,
-2   sum(sal) over (order by sal,empno)
+2   sum(sal) over (order by sal,empno)  //这里order by 员工id 为了区分相同薪水的先后，不处理会让他们并列导致结果是全部相加后的，比如下面WARD和MARTIN的结果会都是5350
 3     as running_total
 4 from emp
 5 order by 2
@@ -880,14 +896,17 @@ COUNT(COMM)
 /* MySQL and PostgreSQL and SQL Server */
 1 select e.ename, e.sal,
 2   (select sum(d.sal) from emp d
-3   where d.empno <= e.empno) as running_total
+3   where d.empno <= e.empno) as running_total  // 标量子查询，现在可以这么写不过不需要了
 4  from emp e
 5 order by 3
 ```
 
 ![](img/lec4/19.png)
 
+思考题：累乘、累减怎么做
+
 ### 5.3.7. 计算众数
+
 ```sql
 select sal
     from emp
@@ -907,7 +926,7 @@ SAL
 /* Oracle */
 
 1 select max(sal)
-2     keep(dense_rank first order by cnt desc) sal
+2     keep(dense_rank first order by cnt desc) sal  //如果有多个众数，keep只会保留最大的
 3   from (
 4     select sal, count(*) cnt
 5       from emp
@@ -920,7 +939,7 @@ SAL
 2   from emp
 3 where deptno = 20
 4 group by sal
-5 having count(*) >= all ( select count(*)
+5 having count(*) >= all ( select count(*)    // group by + having
 6                           from emp
 7                           where deptno = 20
 8                           group by sal )
@@ -947,16 +966,16 @@ SAL
 1 select avg(sal)
 2   from (
 3     select e.sal
-4       from emp e, emp d
+4       from emp e, emp d   // 自连接
 5     where e.deptno = d.deptno
 6       and e.deptno = 20
-7     group by e.sal
-8     having sum(case when e.sal = d.sal then 1 else 0 end)
-9             >= abs(sum(sign(e.sal - d.sal)))
+7     group by e.sal   //去除重复值
+8     having sum(case when e.sal = d.sal then 1 else 0 end)  //与e.sal相等的数量
+9             >= abs(sum(sign(e.sal - d.sal)))  //比e.sal大的数和比他小的数的数量之差
 10  ) x
 
 /* Oracle */
-1 select median(sal)
+1 select median(sal)  // 中位数的方法median
 2   from emp
 3 where deptno=20
 ```
@@ -975,10 +994,10 @@ SAL
 2   from (
 3     select deptno,
 4       sum(sal)over( ) total,
-5       sum(sal)over(partition by deptno) d10
+5       sum(sal)over(partition by deptno) d10  //按deptno分组求和
 6     from emp
 7   ) x
-8 where deptno=10
+8 where deptno=10  //不能放入内嵌视图
 ```
 
 ### 5.3.10. 计算平均值时去掉最大值和最小值
@@ -987,7 +1006,7 @@ SAL
 1 select avg(sal)
 2   from emp
 3 where sal not in (
-4   (select min(sal) from emp),
+4   (select min(sal) from emp),    //表很大会有性能问题，可以构建索引
 5   (select max(sal) from emp)
 6 )
 
@@ -1048,7 +1067,7 @@ create view V (id,amt,trx)
 ```
 
 ### 5.3.12. 思考题
-1. 2.5是进行累加，你看看怎么做累计乘法，和累计减法。
+1. 2.5是进行累加，你看看怎么做累计乘法，和累计减法。 累乘：exp(sum(ln(num)))需要考虑数值负数不能ln  累减sum(-num)
 2. 如果有时间，希望你把这一讲中所有的例子在你的数据库中尝试一下
 3. 如果你还有时间，创建大一点的表，100万行，然后执行查询100次，1000次或者100个并发同时执行，就可以感受到性能和效率
 4. 尝试将读写分离来提高资源：可以先离线计算出一个中位数(但是不是完全正确，但是已经相当精确)
