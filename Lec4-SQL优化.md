@@ -1360,6 +1360,7 @@ select * from emp_project
 ```
 1. 必须保证类型相同和字段数要相同
 2. 如果有重复内容UNION ALL一并纳入
+3. union会去除重复的。去除重复在数据库中只有一种办法就是排序，所以需要考虑性能问题。除非必要否则不要用distinct或union。排序是非关系型操作，大数据排序对性能是灾难。
 
 ```sql
 /* × */
@@ -1432,7 +1433,7 @@ DEPTNO
 3 where deptno not in (select deptno from emp)
 ```
 
-2. MySQL：空值not in会出现问题，同时避免in，改用exists
+2. MySQL：空值not in或者or会出现问题，同时避免in，改用exists 
 
 ```sql
 select deptno
@@ -1470,6 +1471,11 @@ null
 ```
 
 ### 5.5.3. 从一个表检索另一个表不相关的行(外连接)
+
+获取完整的数据就不能只用差了，只获取deptno就可以差
+
+不满足连接条件的行就要使用外连接
+
 ```sql
 DEPTNO      DNAME             LOC
 ----------  ----------------- -------------
@@ -1631,7 +1637,7 @@ select e.empno,
       when eb.type = 2 then .2
       else .3
     end as bonus
-  from emp e, emp_bonus eb
+  from emp e, emp_bonus eb    // 计算奖金
 where e.empno = eb.empno
   and e.deptno = 10
 ```
@@ -1660,6 +1666,7 @@ group by deptno
 DEPTNO   TOTAL_SAL   TOTAL_BONUS
 ------   ------      ------
 10       10050        2135
+// 奖金总额正确，但工资总额不对，因为有员工拿了两次奖金，表内连接后有两条记录
 
 /* 单独计算一下金额，问题？部分员工被计算了2次 */
 select sum(sal) from emp where deptno=10
@@ -1688,7 +1695,7 @@ MILLER      1300
 /* Perform a sum of only the DISTINCT salaries: 不得不使用distinct*/
 
 1   select deptno,
-2     sum(distinct sal) as total_sal,
+2     sum(distinct sal) as total_sal,   // 对吗？
 3     sum(bonus) as total_bonus
 4   from (
 5     select e.empno,
@@ -1739,3 +1746,9 @@ DEPTNO TOTAL_SAL TOTAL_BONUS
 ------ ---------- -----------
 10 2600 390
 ```
+
+
+
+emp left outer join ...  补充少的
+
+... group by empno ...  去重
