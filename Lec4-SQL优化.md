@@ -1231,7 +1231,7 @@ select last_day(add_months(trunc(sysdate,'y'),1)) dy
 3   date_add(
 4   date_add(
 5   date_add(current_date,
-6     interval -dayofyear(current_date) day),
+6     interval -dayofyear(current_date) day), //当前日期是第几天
 7     interval 1 day),
 8     interval 1 month))) dy
 9 from t1
