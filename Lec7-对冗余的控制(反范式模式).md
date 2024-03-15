@@ -5,6 +5,7 @@ Lec7-对冗余的控制(反范式模式)
 2. 第二范式是一条记录只能被唯一主键标识
 3. 第三范式是一个字段全部和一个字段是没有函数依赖，比如年龄和出生日期
 4. 打破范式是为了引入可控制的冗余
+5. 打破范式 降低表链接的数量
 
 # 1. Consider the Introduction of Controlled Redundancy
 1. Determine whether introducing redundancy in a controlled manner by relaxing the normalization rules will improve system performance.
