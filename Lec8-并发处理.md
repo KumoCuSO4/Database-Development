@@ -314,7 +314,7 @@ insert /*+ append */ into fast_scrty
     name_ac,
     per_status,
     'N'
-  from pers_search_fast
+  from pers_search_fast  // 不要命名为fast，希望他快不一定真的快
 ```
 
 ```sql
@@ -356,7 +356,7 @@ where a.emplid = b.emplid
          from treenode tn
          where tn.setid = sec.setid
            and tn.setid = job.setid_dept
-           and tn.tree_name = 'DEPT_SECURITY'
+           and tn.tree_name = 'DEPT_SECURITY'  //比较好的条件
            and tn.effdt = sec.tree_effdt
            and tn.tree_node = job.deptid
            and tn.tree_node_num  between sec.tree_node_num
@@ -368,7 +368,7 @@ where a.emplid = b.emplid
                     and sec.setid = sec2.setid
                     and sec.tree_node_num <> sec2.tree_node_num
                     and tn.tree_node_num
-                        between sec2.tree_node_num
+                        between sec2.tree_node_num   // 比较复杂的操作 树结构
                         and sec2.tree_node_num_end
                     and sec2.tree_node_num
                         between sec.tree_node_num
@@ -376,6 +376,8 @@ where a.emplid = b.emplid
 ```
 
 ## 4.3. 通过分区提高性能
-1. 记住，单边范围条件不能充分利用索引和分区
-2. 所有的更新操作中，删除（delete）最优可能造成麻烦
-3. 当数据量大到一定程度，不得不进入“读写分离”的数据仓库领域
+
+1. 记住，单边范围条件不能充分利用索引和分区  x>100 尽量避免 除非是很小的范围
+2. 所有的更新操作中，删除（delete）最优可能造成麻烦  delete>update>insert
+3. insert要维护索引 ，update只需要维护更新字段的索引。update一定有where子句，面对加锁死锁问题 。delete包含了insert和update的所有缺点。把delete变成update，可以设置一个标志位为false，但最好的方式存储删除的时间戳，因为可以定期清除一定时间段之前的历史数据。
+4. 当数据量大到一定程度，不得不进入“读写分离”的数据仓库领域
